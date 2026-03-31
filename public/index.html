@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Mutt Match</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+:root {
+  --coral:#FF6B6B; --yellow:#FFD93D; --teal:#4ECDC4;
+  --purple:#A855F7; --green:#6BCB77; --blue:#2D9CDB;
+  --dark:#2D2D44; --mid:#5A5A7A; --light:#F8F4FF;
+  --sponsor:#FF6B35; --white:#FFFFFF;
+}
+html,body { height:100%; overflow:hidden; background:#1a1a2e; }
+body { display:flex; justify-content:center; align-items:center; font-family:'Nunito',sans-serif; }
+.app {
+  width:min(390px,100vw); height:min(844px,100vh);
+  background:var(--light); border-radius:clamp(0px,50px,50px);
+  overflow:hidden; position:relative;
+  box-shadow:0 40px 80px rgba(0,0,0,.6);
+}
+/* ── Screens ── */
+.screen { position:absolute; inset:0; display:none; flex-direction:column; overflow:hidden; }
+.screen.active { display:flex; animation:slideUp .3s ease; }
+@keyframes slideUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+/* ── Scrollable body ── */
+.scroll-body { flex:1; overflow-y:auto; }
+.scroll-body::-webkit-scrollbar { display:none; }
+/* ── Top bar ── */
+.top-bar {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:52px 22px 14px; flex-shrink:0;
+}
+.logo { font-family:'Fredoka One',cursive; font-size:26px; color:#fff; text-shadow:0 2px 8px rgba(0,0,0,.2); }
+.avatar-btn { width:38px; height:38px; border-radius:50%; border:2px solid rgba(255,255,255,.6); background:var(--yellow); display:flex; align-items:center; justify-content:center; font-size:20px; cursor:pointer; }
+/* ── Buttons ── */
+.btn { display:flex; align-items:center; justify-content:center; gap:8px; padding:16px 28px; border-radius:50px; border:none; font-family:'Nunito',sans-serif; font-weight:800; font-size:17px; cursor:pointer; transition:transform .15s, box-shadow .15s; }
+.btn:active { transform:scale(.96); }
+.btn-full { width:100%; }
+.btn-primary { background:var(--coral); color:#fff; box-shadow:0 6px 20px rgba(255,107,107,.4); }
+.btn-secondary { background:#fff; color:var(--dark); box-shadow:0 4px 14px rgba(0,0,0,.12); }
+.btn-teal { background:var(--teal); color:#fff; box-shadow:0 6px 20px rgba(78,205,196,.4); }
+.btn-yellow { background:var(--yellow); color:var(--dark); box-shadow:0 6px 20px rgba(255,217,61,.4); }
+.btn-purple { background:var(--purple); color:#fff; box-shadow:0 6px 20px rgba(168,85,247,.4); }
+.btn-ghost { background:rgba(255,255,255,.2); color:#fff; }
+.btn-sm { padding:10px 20px; font-size:14px; }
+/* ── Cards ── */
+.card { background:#fff; border-radius:22px; padding:18px; box-shadow:0 4px 20px rgba(0,0,0,.07); }
+/* ── XP bar ── */
+.xp-track { background:rgba(0,0,0,.1); border-radius:50px; height:10px; overflow:hidden; }
+.xp-fill { height:100%; background:linear-gradient(90deg,var(--yellow),var(--coral)); border-radius:50px; transition:width .6s ease; }
+/* ── Circle photo ── */
+.cpic { border-radius:50%; overflow:hidden; border:3px solid #fff; box-shadow:0 4px 14px rgba(0,0,0,.15); background:#ddd; display:flex; align-items:center; justify-content:center; font-size:28px; flex-shrink:0; cursor:pointer; transition:transform .2s, box-shadow .2s; position:relative; }
+.cpic img { width:100%; height:100%; object-fit:cover; }
+.cpic.selected { border-color:var(--yellow); box-shadow:0 0 0 4px rgba(255,217,61,.5); transform:scale(1.06); }
+.cpic.matched { border-color:var(--green); box-shadow:0 0 0 4px rgba(107,203,119,.4); }
+/* ── Bottom nav ── */
+.bottom-nav { display:flex; background:#fff; padding:10px 0 28px; flex-shrink:0; border-top:1px solid rgba(0,0,0,.06); }
+.nav-item { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; cursor:pointer; padding:5px 0; }
+.nav-icon { font-size:22px; }
+.nav-label { font-size:10px; font-weight:700; color:#bbb; }
+.nav-item.active .nav-label { color:var(--purple); }
+/* ── Toast ── */
+#toast { position:fixed; bottom:100px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--dark); color:#fff; padding:12px 24px; border-radius:50px; font-weight:700; font-size:14px; opacity:0; transition:all .3s; pointer-events:none; z-index:9999; white-space:nowrap; }
+#toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+/* ── Loader ── */
+.loader { display:none; position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:9998; align-items:center; justify-content:center; }
+.loader.show { display:flex; }
+.spinner { width:48px; height:48px; border:5px solid rgba(255,255,255,.3); border-top-color:#fff; border-radius:50%; animation:spin .8s linear infinite; }
+@keyframes spin { to{transform:rotate(360deg)} }
+
+/* ════════ SCREEN: WELCOME ════════ */
+#s-welcome { background:linear-gradient(160deg,#6A0DAD,#FF6B6B 60%,#FFD93D); }
+.welcome-body { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:40px 32px; gap:14px; }
+.welcome-paw { font-size:80px; animation:float 3s ease-in-out infinite; }
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-12px)} }
+.welcome-title { font-family:'Fredoka One',cursive; font-size:54px; color:#fff; text-align:center; line-height:1.05; text-shadow:0 4px 16px rgba(0,0,0,.2); }
+.welcome-sub { font-size:16px; color:rgba(255,255,255,.85); text-align:center; line-height:1.5; }
+.welcome-actions { width:100%; display:flex; flex-direction:column; gap:12px; }
+.divider { text-align:center; color:rgba(255,255,255,.55); font-size:13px; font-weight:700; }
+
+/* ════════ SCREEN: SIGNUP ════════ */
+#s-signup { background:linear-gradient(160deg,#6A0DAD,#A855F7); }
+.signup-inner { padding:0 26px 32px; display:flex; flex-direction:column; gap:14px; }
+.screen-title { font-family:'Fredoka One',cursive; font-size:30px; color:#fff; text-align:center; }
+.screen-sub { font-size:13px; color:rgba(255,255,255,.7); text-align:center; margin-top:-6px; }
+.avatar-picker { display:flex; flex-direction:column; align-items:center; gap:8px; }
+.avatar-circle { width:88px; height:88px; border-radius:50%; background:rgba(255,255,255,.2); border:3px dashed rgba(255,255,255,.5); display:flex; align-items:center; justify-content:center; font-size:36px; cursor:pointer; overflow:hidden; }
+.avatar-circle img { width:100%; height:100%; object-fit:cover; }
+.avatar-lbl { font-size:12px; color:rgba(255,255,255,.65); font-weight:700; }
+.fgroup { display:flex; flex-direction:column; gap:5px; }
+.flabel { font-size:11px; font-weight:800; color:rgba(255,255,255,.65); text-transform:uppercase; letter-spacing:.5px; }
+.finput { background:rgba(255,255,255,.15); border:2px solid rgba(255,255,255,.25); border-radius:13px; padding:13px 16px; font-family:'Nunito',sans-serif; font-size:15px; color:#fff; outline:none; width:100%; }
+.finput::placeholder { color:rgba(255,255,255,.4); }
+.finput:focus { border-color:rgba(255,255,255,.6); }
+
+/* ════════ SCREEN: PETS OF THE DAY ════════ */
+#s-potd { background:linear-gradient(160deg,#FF6B6B,#FFD93D); }
+.potd-body { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:28px; gap:16px; text-align:center; }
+.potd-eyebrow { font-size:12px; font-weight:800; color:rgba(255,255,255,.8); text-transform:uppercase; letter-spacing:1.5px; }
+.potd-title { font-family:'Fredoka One',cursive; font-size:36px; color:#fff; line-height:1.1; text-shadow:0 3px 12px rgba(0,0,0,.15); }
+.potd-card { background:rgba(255,255,255,.95); border-radius:26px; padding:22px; width:100%; display:flex; flex-direction:column; align-items:center; gap:10px; box-shadow:0 12px 40px rgba(0,0,0,.15); }
+.potd-photo { width:110px; height:110px; border-radius:50%; background:linear-gradient(135deg,#FFD93D,#FF6B6B); display:flex; align-items:center; justify-content:center; font-size:52px; border:4px solid #fff; box-shadow:0 6px 20px rgba(0,0,0,.1); }
+.potd-name { font-family:'Fredoka One',cursive; font-size:24px; color:var(--dark); }
+.potd-breed { font-size:12px; color:var(--mid); font-weight:700; }
+.potd-caption { font-size:13px; color:var(--mid); text-align:center; line-height:1.5; font-style:italic; }
+.potd-sponsor { background:rgba(255,107,53,.1); border-radius:50px; padding:5px 14px; font-size:11px; font-weight:800; color:var(--sponsor); }
+.unlock-badge { background:var(--green); color:#fff; border-radius:50px; padding:8px 20px; font-size:13px; font-weight:800; display:flex; align-items:center; gap:6px; }
+.comeback-note { font-size:12px; color:rgba(255,255,255,.75); font-weight:600; }
+
+/* ════════ SCREEN: HOME ════════ */
+#s-home { background:linear-gradient(160deg,#4ECDC4,#6A0DAD); }
+.home-inner { padding:0 18px 20px; display:flex; flex-direction:column; gap:14px; }
+.profile-strip { background:rgba(255,255,255,.15); backdrop-filter:blur(10px); border-radius:20px; padding:14px 16px; display:flex; align-items:center; gap:13px; }
+.profile-avi { width:52px; height:52px; border-radius:50%; background:var(--yellow); border:3px solid rgba(255,255,255,.75); display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0; overflow:hidden; cursor:pointer; }
+.profile-avi img { width:100%; height:100%; object-fit:cover; }
+.profile-info { flex:1; min-width:0; }
+.level-chip { display:inline-flex; align-items:center; gap:4px; background:var(--yellow); color:var(--dark); border-radius:50px; padding:2px 10px; font-size:11px; font-weight:800; margin-bottom:3px; }
+.profile-name { font-weight:800; color:#fff; font-size:15px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.xp-row { display:flex; align-items:center; gap:7px; margin-top:4px; }
+.xp-txt { font-size:11px; color:rgba(255,255,255,.75); font-weight:700; flex-shrink:0; }
+.sec-label { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1px; color:rgba(255,255,255,.65); }
+.stats-row { display:flex; gap:9px; }
+.stat-card { flex:1; background:rgba(255,255,255,.15); border-radius:15px; padding:13px 10px; text-align:center; backdrop-filter:blur(10px); }
+.stat-num { font-family:'Fredoka One',cursive; font-size:26px; color:#fff; line-height:1; }
+.stat-lbl { font-size:10px; color:rgba(255,255,255,.65); font-weight:700; margin-top:2px; }
+/* POTD home card */
+.potd-home { background:linear-gradient(135deg,#FFD93D,#FF6B6B); border-radius:18px; padding:14px 16px; display:flex; align-items:center; gap:13px; cursor:pointer; position:relative; overflow:hidden; }
+.potd-home::after { content:''; position:absolute; top:-20px; right:-20px; width:70px; height:70px; background:rgba(255,255,255,.15); border-radius:50%; }
+.potd-thumb { width:48px; height:48px; border-radius:50%; background:rgba(255,255,255,.3); display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0; }
+.potd-home-info { flex:1; }
+.potd-home-title { font-family:'Fredoka One',cursive; font-size:14px; color:#fff; }
+.potd-home-sub { font-size:12px; color:rgba(255,255,255,.85); font-weight:600; }
+.new-dot { width:10px; height:10px; background:#fff; border-radius:50%; flex-shrink:0; }
+/* Sponsor bowl */
+.bowl-card { background:#fff; border-radius:18px; padding:14px 16px; }
+.bowl-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.bowl-brand { font-size:11px; font-weight:800; color:var(--sponsor); text-transform:uppercase; letter-spacing:.5px; }
+.bowl-pct { background:rgba(255,107,53,.1); color:var(--sponsor); padding:3px 10px; border-radius:50px; font-size:11px; font-weight:700; }
+.bowl-row { display:flex; align-items:center; gap:11px; }
+.bowl-icon { font-size:30px; }
+.bowl-info { flex:1; }
+.bowl-label { font-size:13px; font-weight:700; color:var(--dark); margin-bottom:4px; }
+.bowl-sub { font-size:11px; color:var(--mid); }
+.bowl-track { background:#f0f0f0; border-radius:50px; height:11px; overflow:hidden; margin-top:6px; }
+.bowl-fill { height:100%; background:linear-gradient(90deg,var(--sponsor),var(--yellow)); border-radius:50px; transition:width .6s; }
+.play-btn-wrap { padding:0 0 4px; }
+
+/* ════════ SCREEN: PHOTO SETUP ════════ */
+#s-photos { background:linear-gradient(160deg,#2D2D44,#6A0DAD); }
+.photos-inner { padding:0 18px 24px; display:flex; flex-direction:column; gap:14px; }
+.pairs-list { display:flex; flex-direction:column; gap:10px; }
+.pair-item { background:rgba(255,255,255,.12); border-radius:16px; padding:12px 14px; display:flex; align-items:center; gap:11px; }
+.pair-photos { display:flex; align-items:center; gap:8px; }
+.pair-photo { width:46px; height:46px; border-radius:50%; background:rgba(255,255,255,.2); display:flex; align-items:center; justify-content:center; font-size:20px; overflow:hidden; flex-shrink:0; }
+.pair-photo img { width:100%; height:100%; object-fit:cover; }
+.pair-arrow { font-size:14px; color:rgba(255,255,255,.4); }
+.pair-names { flex:1; }
+.pair-person { font-weight:800; color:#fff; font-size:13px; }
+.pair-dog { font-size:12px; color:rgba(255,255,255,.7); font-weight:600; }
+.pair-del { background:rgba(255,107,107,.3); border:none; color:#fff; border-radius:50%; width:28px; height:28px; font-size:14px; cursor:pointer; flex-shrink:0; }
+.add-pair-form { background:rgba(255,255,255,.1); border-radius:20px; padding:18px; display:flex; flex-direction:column; gap:12px; }
+.add-title { font-family:'Fredoka One',cursive; font-size:18px; color:#fff; }
+.photo-upload-row { display:flex; gap:12px; }
+.photo-upload-box { flex:1; display:flex; flex-direction:column; align-items:center; gap:7px; }
+.upload-circle { width:70px; height:70px; border-radius:50%; background:rgba(255,255,255,.15); border:2px dashed rgba(255,255,255,.4); display:flex; align-items:center; justify-content:center; font-size:28px; cursor:pointer; overflow:hidden; }
+.upload-circle img { width:100%; height:100%; object-fit:cover; }
+.upload-lbl { font-size:11px; color:rgba(255,255,255,.6); font-weight:700; text-align:center; }
+.needs-more { background:rgba(255,107,107,.2); border-radius:14px; padding:12px 16px; text-align:center; font-size:13px; color:rgba(255,255,255,.85); font-weight:700; }
+
+/* ════════ SCREEN: GAME ════════ */
+#s-game { background:linear-gradient(180deg,#4ECDC4,#2D9CDB); }
+.game-top { padding:52px 18px 10px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+.game-meta { display:flex; flex-direction:column; }
+.round-lbl { font-size:10px; color:rgba(255,255,255,.65); font-weight:800; text-transform:uppercase; letter-spacing:.5px; }
+.round-num { font-family:'Fredoka One',cursive; font-size:22px; color:#fff; line-height:1.1; }
+.timer-pill { background:rgba(0,0,0,.2); border-radius:50px; padding:6px 14px; font-family:'Fredoka One',cursive; font-size:20px; color:#fff; }
+.timer-pill.warn { background:rgba(255,107,107,.5); }
+.prog-dots { display:flex; gap:6px; padding:0 18px 10px; flex-shrink:0; }
+.pdot { flex:1; height:6px; border-radius:50px; background:rgba(255,255,255,.25); }
+.pdot.done { background:var(--yellow); }
+.game-hint { background:rgba(255,255,255,.2); margin:0 18px 14px; border-radius:14px; padding:9px 14px; font-size:13px; color:#fff; font-weight:700; text-align:center; flex-shrink:0; }
+.game-pairs { flex:1; overflow-y:auto; padding:0 18px 14px; display:flex; flex-direction:column; gap:14px; }
+.game-pairs::-webkit-scrollbar { display:none; }
+.game-row { display:flex; align-items:center; gap:10px; }
+.gpic { width:70px; height:70px; }
+.connector { flex:1; height:4px; border-radius:50px; background:rgba(255,255,255,.2); display:flex; align-items:center; justify-content:center; position:relative; }
+.connector.connected { background:var(--yellow); box-shadow:0 0 12px rgba(255,217,61,.6); }
+.connector-dot { width:10px; height:10px; border-radius:50%; background:rgba(255,255,255,.35); }
+.connector-dot.connected { background:var(--yellow); }
+.game-footer { padding:12px 18px 28px; flex-shrink:0; }
+@keyframes matchPop { 0%{transform:scale(1)} 40%{transform:scale(1.18)} 100%{transform:scale(1)} }
+.pop { animation:matchPop .3s ease; }
+
+/* ════════ SCREEN: RESULTS ════════ */
+#s-results { background:linear-gradient(160deg,#6A0DAD,#2D9CDB); }
+.results-inner { padding:0 18px 24px; display:flex; flex-direction:column; gap:13px; }
+.score-hero { background:rgba(255,255,255,.15); backdrop-filter:blur(10px); border-radius:22px; padding:22px; text-align:center; display:flex; flex-direction:column; align-items:center; gap:7px; }
+.score-stars { font-size:34px; letter-spacing:4px; }
+.score-big { font-family:'Fredoka One',cursive; font-size:46px; color:#fff; line-height:1; }
+.score-sub { font-size:14px; color:rgba(255,255,255,.8); font-weight:700; }
+.xp-chip { background:var(--yellow); border-radius:50px; padding:7px 18px; font-size:15px; font-weight:800; color:var(--dark); display:inline-flex; align-items:center; gap:6px; }
+.lp-card { background:rgba(255,255,255,.15); backdrop-filter:blur(10px); border-radius:18px; padding:14px 16px; }
+.lp-row { display:flex; align-items:center; justify-content:space-between; margin-bottom:7px; }
+.lp-level { font-family:'Fredoka One',cursive; font-size:15px; color:#fff; }
+.lp-next { font-size:11px; color:rgba(255,255,255,.65); font-weight:700; }
+.badge-unlock-card { background:linear-gradient(135deg,#FFD93D,#FF6B6B); border-radius:18px; padding:14px 16px; display:flex; align-items:center; gap:13px; }
+.buc-icon { font-size:42px; }
+.buc-info { flex:1; }
+.buc-new { font-size:10px; font-weight:800; color:rgba(255,255,255,.8); text-transform:uppercase; letter-spacing:1px; }
+.buc-name { font-family:'Fredoka One',cursive; font-size:18px; color:#fff; }
+.buc-desc { font-size:12px; color:rgba(255,255,255,.85); font-weight:600; }
+.lvlup-card { background:linear-gradient(135deg,var(--purple),var(--teal)); border-radius:18px; padding:14px 16px; text-align:center; color:#fff; }
+.lvlup-title { font-family:'Fredoka One',cursive; font-size:22px; }
+.lvlup-sub { font-size:13px; font-weight:700; opacity:.85; }
+.results-list { display:flex; flex-direction:column; gap:8px; }
+.res-row { background:rgba(255,255,255,.12); border-radius:14px; padding:9px 13px; display:flex; align-items:center; gap:10px; }
+.res-photos { display:flex; align-items:center; gap:7px; }
+.res-photo { width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:20px; overflow:hidden; }
+.res-photo img { width:100%; height:100%; object-fit:cover; }
+.res-arrow { font-size:13px; color:rgba(255,255,255,.4); }
+.res-names { flex:1; }
+.res-pair { font-size:13px; font-weight:700; color:#fff; }
+.res-outcome { font-size:18px; flex-shrink:0; }
+.sponsor-qr { background:#fff; border-radius:18px; padding:14px 16px; display:flex; align-items:center; gap:13px; }
+.qr-box { width:54px; height:54px; border-radius:10px; background:#f0f0f0; display:flex; align-items:center; justify-content:center; font-size:26px; flex-shrink:0; }
+.qr-brand { font-size:10px; font-weight:800; color:var(--sponsor); text-transform:uppercase; letter-spacing:.5px; }
+.qr-hed { font-size:13px; font-weight:800; color:var(--dark); }
+.qr-sub { font-size:11px; color:var(--mid); }
+.qr-cta { font-size:12px; font-weight:800; color:var(--sponsor); margin-top:3px; }
+.res-actions { display:flex; gap:10px; padding:0 0 4px; flex-shrink:0; }
+
+/* ════════ SCREEN: PROFILE ════════ */
+#s-profile { background:linear-gradient(160deg,#2D2D44,#6A0DAD); }
+.profile-inner { padding:0 18px 24px; display:flex; flex-direction:column; gap:14px; }
+.profile-hero { display:flex; flex-direction:column; align-items:center; gap:9px; padding-bottom:4px; }
+.ph-avi { width:84px; height:84px; border-radius:50%; background:var(--yellow); border:4px solid rgba(255,255,255,.4); display:flex; align-items:center; justify-content:center; font-size:38px; position:relative; overflow:hidden; }
+.ph-avi img { width:100%; height:100%; object-fit:cover; }
+.ph-name { font-family:'Fredoka One',cursive; font-size:24px; color:#fff; }
+.completion-card { background:rgba(255,255,255,.1); border-radius:18px; padding:14px 16px; }
+.cc-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.cc-title { font-weight:800; color:#fff; font-size:14px; }
+.cc-pct { font-family:'Fredoka One',cursive; font-size:20px; color:var(--yellow); }
+.cc-items { display:flex; flex-direction:column; gap:7px; margin-top:10px; }
+.cc-item { display:flex; align-items:center; gap:9px; font-size:13px; color:rgba(255,255,255,.8); font-weight:600; }
+.cc-check { font-size:15px; }
+.cc-pending { opacity:.55; }
+.badges-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:9px; }
+.badge-cell { display:flex; flex-direction:column; align-items:center; gap:4px; background:rgba(255,255,255,.1); border-radius:14px; padding:11px 5px; cursor:default; }
+.badge-cell.locked { opacity:.3; }
+.badge-cell.earned { background:rgba(255,217,61,.2); }
+.bc-icon { font-size:24px; }
+.bc-name { font-size:9px; color:rgba(255,255,255,.85); text-align:center; font-weight:700; line-height:1.2; }
+.pet-coll { display:flex; gap:9px; overflow-x:auto; padding-bottom:4px; }
+.pet-coll::-webkit-scrollbar { display:none; }
+.pet-card { flex-shrink:0; width:68px; display:flex; flex-direction:column; align-items:center; gap:5px; background:rgba(255,255,255,.1); border-radius:14px; padding:9px 5px; }
+.pet-card.locked { opacity:.35; }
+.pc-icon { font-size:26px; }
+.pc-name { font-size:9px; color:rgba(255,255,255,.8); text-align:center; font-weight:700; }
+.sec-title { font-weight:800; color:#fff; font-size:14px; }
+
+/* ════════ PHOTO LIGHTBOX ════════ */
+#lightbox { display:none; position:fixed; inset:0; background:rgba(0,0,0,.75); z-index:9997; align-items:center; justify-content:center; }
+#lightbox.show { display:flex; }
+#lightbox-img { max-width:280px; max-height:280px; border-radius:50%; object-fit:cover; border:4px solid #fff; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+#lightbox-emoji { font-size:140px; }
+</style>
+</head>
+<body>
+<div id="toast"></div>
+<div class="loader" id="loader"><div class="spinner"></div></div>
+<div id="lightbox" onclick="closeLightbox()"><img id="lightbox-img" src="" alt=""><span id="lightbox-emoji"></span></div>
+
+<div class="app" id="app">
+
+<!-- ══ WELCOME ══ -->
+<div class="screen active" id="s-welcome">
+  <div class="welcome-body">
+    <div class="welcome-paw">🐾</div>
+    <div class="welcome-title">Mutt<br>Match</div>
+    <div class="welcome-sub">Can you match the owner<br>to their dog? Let's find out.</div>
+    <div class="welcome-actions">
+      <button class="btn btn-primary btn-full" onclick="go('s-signup')">🐶 Create Account</button>
+      <div class="divider">already have an account?</div>
+      <button class="btn btn-secondary btn-full" onclick="showLogin()">Log In</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SIGNUP ══ -->
+<div class="screen" id="s-signup">
+  <div class="top-bar">
+    <div class="logo">Mutt Match</div>
+    <button class="btn btn-ghost btn-sm" onclick="go('s-welcome')">← Back</button>
+  </div>
+  <div class="scroll-body">
+    <div class="signup-inner">
+      <div class="screen-title">Join the Pack 🐾</div>
+      <div class="screen-sub">Create your free account</div>
+      <div class="avatar-picker">
+        <div class="avatar-circle" id="signup-avatar-circle" onclick="document.getElementById('signup-avatar-input').click()">🧑</div>
+        <input type="file" id="signup-avatar-input" accept="image/*" style="display:none" onchange="previewAvatar(this,'signup-avatar-circle','signup-avatar-b64')">
+        <input type="hidden" id="signup-avatar-b64">
+        <div class="avatar-lbl">Tap to add your photo</div>
+      </div>
+      <div class="fgroup">
+        <div class="flabel">Username</div>
+        <input class="finput" id="su-username" type="text" placeholder="e.g. DogDad_Joe">
+      </div>
+      <div class="fgroup">
+        <div class="flabel">Email</div>
+        <input class="finput" id="su-email" type="email" placeholder="you@email.com">
+      </div>
+      <div class="fgroup">
+        <div class="flabel">Password</div>
+        <input class="finput" id="su-password" type="password" placeholder="at least 6 characters">
+      </div>
+      <div class="fgroup">
+        <div class="flabel">Your Pet's Name (optional)</div>
+        <input class="finput" id="su-petname" type="text" placeholder="e.g. Biscuit">
+      </div>
+      <div class="fgroup">
+        <div class="flabel">Pet's Breed (optional)</div>
+        <input class="finput" id="su-petbreed" type="text" placeholder="e.g. Golden Retriever">
+      </div>
+      <button class="btn btn-yellow btn-full" onclick="doSignup()">Join the Pack 🎉</button>
+      <div class="divider" style="color:rgba(255,255,255,.5);">already have an account? <span style="text-decoration:underline;cursor:pointer" onclick="showLogin()">Log in</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ LOGIN MODAL ══ -->
+<div class="screen" id="s-login">
+  <div style="background:linear-gradient(160deg,#6A0DAD,#A855F7);flex:1;display:flex;flex-direction:column;">
+    <div class="top-bar">
+      <div class="logo">Mutt Match</div>
+      <button class="btn btn-ghost btn-sm" onclick="go('s-welcome')">← Back</button>
+    </div>
+    <div class="scroll-body">
+      <div class="signup-inner">
+        <div class="screen-title">Welcome Back 🐾</div>
+        <div class="screen-sub">Log in to your account</div>
+        <div class="fgroup">
+          <div class="flabel">Username or Email</div>
+          <input class="finput" id="li-username" type="text" placeholder="username or email">
+        </div>
+        <div class="fgroup">
+          <div class="flabel">Password</div>
+          <input class="finput" id="li-password" type="password" placeholder="••••••••">
+        </div>
+        <button class="btn btn-yellow btn-full" onclick="doLogin()">Log In 🐶</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PETS OF THE DAY ══ -->
+<div class="screen" id="s-potd">
+  <div class="potd-body">
+    <div class="potd-eyebrow" id="potd-eyebrow">Welcome to Mutt Match!</div>
+    <div class="potd-title">Today's Pet<br>of the Day 🌟</div>
+    <div class="potd-card">
+      <div class="potd-photo" id="potd-photo">🐕</div>
+      <div class="potd-name" id="potd-pet-name">Loading...</div>
+      <div class="potd-breed" id="potd-breed"></div>
+      <div class="potd-caption" id="potd-caption"></div>
+      <div class="potd-sponsor">🐾 Featured by NutriPaws Pet Food</div>
+    </div>
+    <div class="unlock-badge" id="potd-unlock">🎁 &nbsp;Pet added to your collection!</div>
+    <div class="comeback-note" id="potd-comeback">Come back tomorrow to unlock another pet 🔒</div>
+    <button class="btn btn-primary btn-full" onclick="go('s-home')">Let's Play! 🎮</button>
+  </div>
+</div>
+
+<!-- ══ HOME ══ -->
+<div class="screen" id="s-home">
+  <div class="top-bar">
+    <div class="logo">Mutt Match</div>
+    <div class="avatar-btn" id="home-avatar" onclick="go('s-profile')">🧑</div>
+  </div>
+  <div class="scroll-body">
+    <div class="home-inner">
+      <div class="profile-strip">
+        <div class="profile-avi" id="home-avi" onclick="go('s-profile')">🧑</div>
+        <div class="profile-info">
+          <div class="level-chip" id="home-level-chip">⭐ Lv 1 · Puppy Spotter</div>
+          <div class="profile-name" id="home-username">...</div>
+          <div class="xp-row">
+            <div class="xp-track" style="flex:1"><div class="xp-fill" id="home-xp-fill" style="width:5%"></div></div>
+            <div class="xp-txt" id="home-xp-txt">0 / 200 XP</div>
+          </div>
+        </div>
+      </div>
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-num" id="home-rounds">0</div><div class="stat-lbl">Rounds</div></div>
+        <div class="stat-card"><div class="stat-num" id="home-streak">🔥0</div><div class="stat-lbl">Streak</div></div>
+        <div class="stat-card"><div class="stat-num" id="home-accuracy">0%</div><div class="stat-lbl">Accuracy</div></div>
+      </div>
+      <div class="sec-label">Daily</div>
+      <div class="potd-home" onclick="loadPotd(true)">
+        <div class="potd-thumb" id="home-potd-thumb">🐾</div>
+        <div class="potd-home-info">
+          <div class="potd-home-title">Pets of the Day</div>
+          <div class="potd-home-sub" id="home-potd-sub">Loading today's pet…</div>
+        </div>
+        <div class="new-dot" id="home-potd-dot"></div>
+      </div>
+      <div class="sec-label">Sponsor</div>
+      <div class="bowl-card">
+        <div class="bowl-header">
+          <div class="bowl-brand">🐾 NutriPaws Pet Food</div>
+          <div class="bowl-pct" id="bowl-pct">0% full</div>
+        </div>
+        <div class="bowl-row">
+          <div class="bowl-icon">🥣</div>
+          <div class="bowl-info">
+            <div class="bowl-label">Win rounds to fill the bowl!</div>
+            <div class="bowl-sub">Full bowl = 20% off coupon 🎉</div>
+            <div class="bowl-track"><div class="bowl-fill" id="bowl-fill" style="width:0%"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="play-btn-wrap">
+        <button class="btn btn-primary btn-full" style="font-size:19px;padding:19px;" onclick="startGame()">🎮 &nbsp;Play Now</button>
+      </div>
+      <button class="btn btn-ghost btn-full btn-sm" onclick="go('s-photos')">📸 &nbsp;Manage Photo Pairs</button>
+    </div>
+  </div>
+  <div class="bottom-nav">
+    <div class="nav-item active" onclick="go('s-home')"><div class="nav-icon">🏠</div><div class="nav-label" style="color:var(--purple)">Home</div></div>
+    <div class="nav-item" onclick="startGame()"><div class="nav-icon">🎮</div><div class="nav-label">Play</div></div>
+    <div class="nav-item" onclick="loadPotd(true)"><div class="nav-icon">🌟</div><div class="nav-label">Pets</div></div>
+    <div class="nav-item" onclick="go('s-profile');loadProfile()"><div class="nav-icon">👤</div><div class="nav-label">Profile</div></div>
+  </div>
+</div>
+
+<!-- ══ PHOTO SETUP ══ -->
+<div class="screen" id="s-photos">
+  <div class="top-bar">
+    <div class="logo">Photo Pairs</div>
+    <button class="btn btn-ghost btn-sm" onclick="go('s-home')">🏠 Home</button>
+  </div>
+  <div class="scroll-body">
+    <div class="photos-inner">
+      <div id="pairs-status" class="needs-more" style="display:none"></div>
+      <div id="pairs-list" class="pairs-list"></div>
+      <!-- Add pair form -->
+      <div class="add-pair-form">
+        <div class="add-title">➕ Add a New Pair</div>
+        <div class="photo-upload-row">
+          <div class="photo-upload-box">
+            <div class="upload-circle" id="up-person-circle" onclick="document.getElementById('up-person-input').click()">🧑</div>
+            <input type="file" id="up-person-input" accept="image/*" style="display:none" onchange="previewUpload(this,'up-person-circle','up-person-b64')">
+            <input type="hidden" id="up-person-b64">
+            <div class="upload-lbl">Person photo</div>
+          </div>
+          <div style="display:flex;align-items:center;font-size:24px;color:rgba(255,255,255,.4);padding-top:20px;">↔</div>
+          <div class="photo-upload-box">
+            <div class="upload-circle" id="up-dog-circle" onclick="document.getElementById('up-dog-input').click()">🐶</div>
+            <input type="file" id="up-dog-input" accept="image/*" style="display:none" onchange="previewUpload(this,'up-dog-circle','up-dog-b64')">
+            <input type="hidden" id="up-dog-b64">
+            <div class="upload-lbl">Dog photo</div>
+          </div>
+        </div>
+        <div class="fgroup">
+          <div class="flabel" style="color:rgba(255,255,255,.65)">Person's Name</div>
+          <input class="finput" id="up-person-name" type="text" placeholder="e.g. Marcus">
+        </div>
+        <div class="fgroup">
+          <div class="flabel" style="color:rgba(255,255,255,.65)">Dog's Name</div>
+          <input class="finput" id="up-dog-name" type="text" placeholder="e.g. Biscuit">
+        </div>
+        <button class="btn btn-yellow btn-full" onclick="uploadPair()">Save Pair 🐾</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ GAME ══ -->
+<div class="screen" id="s-game">
+  <div class="game-top">
+    <div class="game-meta">
+      <div class="round-lbl">Round</div>
+      <div class="round-num" id="game-round-num">1</div>
+    </div>
+    <div class="timer-pill" id="game-timer">⏱ 0:00</div>
+    <button class="btn btn-ghost btn-sm" onclick="quitGame()">✕ Quit</button>
+  </div>
+  <div class="prog-dots" id="prog-dots"></div>
+  <div class="game-hint" id="game-hint">👆 Tap a person, then tap their dog to match!</div>
+  <div class="game-pairs" id="game-pairs"></div>
+  <div class="game-footer">
+    <button class="btn btn-yellow btn-full" id="submit-btn" onclick="submitGame()" disabled style="opacity:.5">Match All Pairs to Submit</button>
+  </div>
+</div>
+
+<!-- ══ RESULTS ══ -->
+<div class="screen" id="s-results">
+  <div class="top-bar">
+    <div class="logo">Results</div>
+    <button class="btn btn-ghost btn-sm" onclick="go('s-home')">🏠</button>
+  </div>
+  <div class="scroll-body">
+    <div class="results-inner">
+      <div class="score-hero">
+        <div class="score-stars" id="res-stars">⭐⭐⭐</div>
+        <div class="score-big" id="res-score">—</div>
+        <div class="score-sub" id="res-msg">Great round!</div>
+        <div class="xp-chip" id="res-xp">⚡ +0 XP</div>
+      </div>
+      <div class="lp-card">
+        <div class="lp-row">
+          <div class="lp-level" id="res-level">⭐ Lv 1 · Puppy Spotter</div>
+          <div class="lp-next" id="res-next-level">Next level soon!</div>
+        </div>
+        <div class="xp-track"><div class="xp-fill" id="res-xp-fill" style="width:5%"></div></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.65);margin-top:5px;font-weight:700;" id="res-xp-detail">0 / 200 XP</div>
+      </div>
+      <div id="res-levelup" style="display:none" class="lvlup-card">
+        <div class="lvlup-title">🎉 Level Up!</div>
+        <div class="lvlup-sub" id="res-levelup-title">You reached Bark Detective!</div>
+      </div>
+      <div id="res-badges-wrap"></div>
+      <div class="results-list" id="res-list"></div>
+      <div id="res-sponsor" class="sponsor-qr" style="display:none">
+        <div class="qr-box">📱</div>
+        <div class="qr-info">
+          <div class="qr-brand">🐾 NutriPaws Pet Food</div>
+          <div class="qr-hed">You're a true dog lover!</div>
+          <div class="qr-sub">Scan for free NutriPaws Treats</div>
+          <div class="qr-cta">Scan QR → Claim reward →</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="res-actions" style="padding:0 18px 28px;">
+    <button class="btn btn-teal" style="flex:1" onclick="startGame()">🔄 Play Again</button>
+    <button class="btn btn-secondary" style="flex:1" onclick="go('s-home');loadHome()">🏠 Home</button>
+  </div>
+</div>
+
+<!-- ══ PROFILE ══ -->
+<div class="screen" id="s-profile">
+  <div class="top-bar">
+    <div class="logo">My Profile</div>
+    <button class="btn btn-ghost btn-sm" onclick="go('s-home')">🏠</button>
+  </div>
+  <div class="scroll-body">
+    <div class="profile-inner">
+      <div class="profile-hero">
+        <div class="ph-avi" id="prof-avi">🧑</div>
+        <div class="ph-name" id="prof-name">...</div>
+        <div class="level-chip" id="prof-level-chip">⭐ Lv 1</div>
+        <div class="xp-row" style="width:100%;padding:0 20px;">
+          <div class="xp-track" style="flex:1"><div class="xp-fill" id="prof-xp-fill" style="width:5%"></div></div>
+          <div class="xp-txt" id="prof-xp-txt" style="color:rgba(255,255,255,.7)">0 / 200</div>
+        </div>
+      </div>
+      <div class="completion-card">
+        <div class="cc-header">
+          <div class="cc-title">🐾 Pet Parent Profile</div>
+          <div class="cc-pct" id="prof-completion-pct">0%</div>
+        </div>
+        <div class="xp-track"><div class="xp-fill" id="prof-completion-fill" style="width:0%"></div></div>
+        <div class="cc-items" id="prof-completion-items"></div>
+      </div>
+      <div class="sec-title">🏅 Badges</div>
+      <div class="badges-grid" id="prof-badges"></div>
+      <div class="sec-title">🌟 My Pet Collection <span id="prof-coll-count" style="opacity:.55;font-size:12px;font-weight:600"></span></div>
+      <div class="pet-coll" id="prof-coll"></div>
+      <button class="btn btn-ghost btn-full btn-sm" onclick="doLogout()" style="margin-top:4px;">Log Out</button>
+    </div>
+  </div>
+  <div class="bottom-nav">
+    <div class="nav-item" onclick="go('s-home');loadHome()"><div class="nav-icon">🏠</div><div class="nav-label">Home</div></div>
+    <div class="nav-item" onclick="startGame()"><div class="nav-icon">🎮</div><div class="nav-label">Play</div></div>
+    <div class="nav-item" onclick="loadPotd(true)"><div class="nav-icon">🌟</div><div class="nav-label">Pets</div></div>
+    <div class="nav-item active" onclick=""><div class="nav-icon">👤</div><div class="nav-label" style="color:var(--purple)">Profile</div></div>
+  </div>
+</div>
+
+</div><!-- /app -->
+
+<script>
+// ═══════════════════════════════════════════
+//  STATE & API
+// ═══════════════════════════════════════════
+const API = '';  // same origin
+let token = localStorage.getItem('mm_token');
+let user = null;
+let gameState = {};
+let timerInterval = null;
+let roundCount = 0;
+
+function api(method, path, body) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  return fetch(API + path, opts).then(r => r.json());
+}
+
+function showLoader() { document.getElementById('loader').classList.add('show'); }
+function hideLoader() { document.getElementById('loader').classList.remove('show'); }
+
+function toast(msg, dur = 3000) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), dur);
+}
+
+function go(screenId) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const s = document.getElementById(screenId);
+  if (s) { s.classList.add('active'); }
+}
+
+// ═══════════════════════════════════════════
+//  AUTH
+// ═══════════════════════════════════════════
+async function doSignup() {
+  const username = document.getElementById('su-username').value.trim();
+  const email = document.getElementById('su-email').value.trim();
+  const password = document.getElementById('su-password').value;
+  const pet_name = document.getElementById('su-petname').value.trim();
+  const pet_breed = document.getElementById('su-petbreed').value.trim();
+  const avatar = document.getElementById('signup-avatar-b64').value;
+
+  if (!username || !email || !password) return toast('Please fill in username, email, and password');
+  if (password.length < 6) return toast('Password must be at least 6 characters');
+
+  showLoader();
+  const data = await api('POST', '/api/auth/signup', { username, email, password, pet_name, pet_breed, avatar });
+  hideLoader();
+
+  if (data.error) return toast('❌ ' + data.error);
+  token = data.token;
+  user = data.user;
+  localStorage.setItem('mm_token', token);
+  await loadPotd(false);
+  document.getElementById('potd-eyebrow').textContent = `Welcome, ${user.username}!`;
+  go('s-potd');
+}
+
+async function doLogin() {
+  const username = document.getElementById('li-username').value.trim();
+  const password = document.getElementById('li-password').value;
+  if (!username || !password) return toast('Please enter credentials');
+  showLoader();
+  const data = await api('POST', '/api/auth/login', { username, password });
+  hideLoader();
+  if (data.error) return toast('❌ ' + data.error);
+  token = data.token;
+  user = data.user;
+  localStorage.setItem('mm_token', token);
+  await loadHome();
+  go('s-home');
+}
+
+function showLogin() { go('s-login'); }
+
+function doLogout() {
+  token = null; user = null;
+  localStorage.removeItem('mm_token');
+  go('s-welcome');
+}
+
+async function checkAuth() {
+  if (!token) return false;
+  const data = await api('GET', '/api/auth/me');
+  if (data.error) { token = null; localStorage.removeItem('mm_token'); return false; }
+  user = data.user;
+  return true;
+}
+
+// ═══════════════════════════════════════════
+//  HOME
+// ═══════════════════════════════════════════
+async function loadHome() {
+  if (!user) return;
+  // User info
+  const u = user;
+  document.getElementById('home-username').textContent = u.username;
+  const chip = `⭐ Lv ${u.level} · ${u.level_title}`;
+  document.getElementById('home-level-chip').textContent = chip;
+  setAvi('home-avi', u.avatar, '🧑');
+  setAvi('home-avatar', u.avatar, '🧑');
+
+  const pct = Math.min(100, Math.round((u.xp / u.xp_for_next) * 100));
+  document.getElementById('home-xp-fill').style.width = pct + '%';
+  document.getElementById('home-xp-txt').textContent = `${u.xp} / ${u.xp_for_next} XP`;
+
+  // Stats
+  const stats = await api('GET', '/api/game/stats');
+  document.getElementById('home-rounds').textContent = stats.total_rounds || 0;
+  document.getElementById('home-streak').textContent = `🔥${u.current_streak || 0}`;
+  document.getElementById('home-accuracy').textContent = (stats.accuracy || 0) + '%';
+
+  // Bowl (based on accuracy/rounds as proxy)
+  const bowlPct = Math.min(100, ((stats.total_rounds || 0) % 10) * 10);
+  document.getElementById('bowl-fill').style.width = bowlPct + '%';
+  document.getElementById('bowl-pct').textContent = bowlPct + '% full';
+
+  // POTD preview
+  loadPotdPreview();
+}
+
+async function loadPotdPreview() {
+  const data = await api('GET', '/api/pets/today');
+  if (data.pet) {
+    document.getElementById('home-potd-thumb').textContent = data.pet.pet_emoji;
+    document.getElementById('home-potd-sub').textContent = `${data.pet.pet_name} the ${data.pet.breed} is today's star ✨`;
+    document.getElementById('home-potd-dot').style.display = data.claimed ? 'none' : 'block';
+  }
+}
+
+// ═══════════════════════════════════════════
+//  PETS OF THE DAY
+// ═══════════════════════════════════════════
+async function loadPotd(navigate = true) {
+  showLoader();
+  const data = await api('GET', '/api/pets/today');
+  hideLoader();
+  if (data.error || !data.pet) { toast('Could not load today\'s pet'); return; }
+
+  const pet = data.pet;
+  document.getElementById('potd-photo').textContent = pet.pet_emoji;
+  document.getElementById('potd-pet-name').textContent = pet.pet_name;
+  document.getElementById('potd-breed').textContent = `${pet.breed}`;
+  document.getElementById('potd-caption').textContent = `"${pet.caption}"`;
+
+  if (!data.claimed) {
+    // Auto-claim
+    await api('POST', '/api/pets/claim');
+    document.getElementById('potd-unlock').style.display = 'flex';
+    document.getElementById('potd-comeback').style.display = 'block';
+  } else {
+    document.getElementById('potd-unlock').textContent = '✅ Already in your collection!';
+    document.getElementById('potd-unlock').style.display = 'flex';
+    document.getElementById('potd-comeback').style.display = 'block';
+  }
+
+  if (navigate) go('s-potd');
+}
+
+// ═══════════════════════════════════════════
+//  PHOTO PAIRS
+// ═══════════════════════════════════════════
+async function loadPhotos() {
+  const data = await api('GET', '/api/photos');
+  const pairs = data.pairs || [];
+  const list = document.getElementById('pairs-list');
+  const status = document.getElementById('pairs-status');
+
+  if (pairs.length < 3) {
+    status.style.display = 'block';
+    status.textContent = `You need at least 3 pairs to play. Add ${3 - pairs.length} more!`;
+  } else {
+    status.style.display = 'none';
+  }
+
+  list.innerHTML = pairs.map(p => `
+    <div class="pair-item">
+      <div class="pair-photos">
+        <div class="pair-photo">${photoEl(p.person_photo)}</div>
+        <div class="pair-arrow">↔</div>
+        <div class="pair-photo">${photoEl(p.dog_photo)}</div>
+      </div>
+      <div class="pair-names">
+        <div class="pair-person">${esc(p.person_name)}</div>
+        <div class="pair-dog">🐶 ${esc(p.dog_name)}</div>
+      </div>
+      <button class="pair-del" onclick="deletePair(${p.id})">✕</button>
+    </div>
+  `).join('');
+}
+
+async function uploadPair() {
+  const person_name = document.getElementById('up-person-name').value.trim();
+  const dog_name = document.getElementById('up-dog-name').value.trim();
+  const person_photo_b64 = document.getElementById('up-person-b64').value;
+  const dog_photo_b64 = document.getElementById('up-dog-b64').value;
+
+  if (!person_name || !dog_name) return toast('Enter both names');
+  if (!person_photo_b64) return toast('Upload a person photo');
+  if (!dog_photo_b64) return toast('Upload a dog photo');
+
+  showLoader();
+  const data = await api('POST', '/api/photos', {
+    person_name, dog_name,
+    person_photo_b64, dog_photo_b64
+  });
+  hideLoader();
+
+  if (data.error) return toast('❌ ' + data.error);
+  toast('✅ Pair added!');
+
+  // Reset form
+  document.getElementById('up-person-name').value = '';
+  document.getElementById('up-dog-name').value = '';
+  document.getElementById('up-person-b64').value = '';
+  document.getElementById('up-dog-b64').value = '';
+  document.getElementById('up-person-circle').innerHTML = '🧑';
+  document.getElementById('up-dog-circle').innerHTML = '🐶';
+
+  if (data.new_badges && data.new_badges.length) {
+    data.new_badges.forEach(b => toast(`🏅 Badge unlocked: ${b}`));
+  }
+
+  await loadPhotos();
+}
+
+async function deletePair(id) {
+  showLoader();
+  await api('DELETE', `/api/photos/${id}`);
+  hideLoader();
+  toast('Pair removed');
+  await loadPhotos();
+}
+
+// ═══════════════════════════════════════════
+//  GAME
+// ═══════════════════════════════════════════
+async function startGame() {
+  showLoader();
+  const data = await api('GET', '/api/game/pairs');
+  hideLoader();
+
+  if (data.error === 'not_enough_pairs') {
+    toast('Add at least 3 photo pairs first!');
+    await loadPhotos();
+    go('s-photos');
+    return;
+  }
+  if (data.error) { toast('❌ ' + data.error); return; }
+
+  roundCount++;
+  gameState = {
+    persons: data.persons,
+    dogs: data.dogs,
+    count: data.count,
+    matches: {},       // person_id -> dog_id
+    selectedPerson: null,
+    startTime: Date.now(),
+  };
+
+  go('s-game');
+  document.getElementById('game-round-num').textContent = roundCount;
+  renderGame();
+  startTimer();
+}
+
+function renderGame() {
+  const { persons, dogs, count } = gameState;
+
+  // Progress dots
+  document.getElementById('prog-dots').innerHTML =
+    Array.from({length: count}, (_, i) => `<div class="pdot" id="pdot-${i}"></div>`).join('');
+
+  // Pairs grid — persons left, dogs right, shuffled independently
+  const pairsEl = document.getElementById('game-pairs');
+  pairsEl.innerHTML = persons.map((p, i) => {
+    const d = dogs[i];
+    return `
+      <div class="game-row" id="row-${p.id}">
+        <div class="cpic gpic" id="person-${p.id}"
+          onclick="selectPerson(${p.id})"
+          onmousedown="startDrag(event,${p.id},'person')"
+          ontouchstart="startDrag(event,${p.id},'person')">
+          ${p.photo ? `<img src="${p.photo}" alt="${esc(p.name)}" ondblclick="lightbox('${p.photo}','')">` : '🧑'}
+        </div>
+        <div class="connector" id="connector-${p.id}">
+          <div class="connector-dot" id="cdot-${p.id}"></div>
+        </div>
+        <div class="cpic gpic" id="dog-${d.id}"
+          onclick="selectDog(${d.id})"
+          onmousedown="startDrag(event,${d.id},'dog')"
+          ontouchstart="startDrag(event,${d.id},'dog')">
+          ${d.photo ? `<img src="${d.photo}" alt="${esc(d.name)}" ondblclick="lightbox('${d.photo}','')">` : '🐶'}
+        </div>
+      </div>`;
+  }).join('');
+
+  updateSubmitBtn();
+}
+
+function selectPerson(personId) {
+  // Deselect any previously matched? No — only tap-to-match on unmatched
+  if (isPersonMatched(personId)) return;
+
+  // Deselect previous
+  if (gameState.selectedPerson) {
+    document.getElementById('person-' + gameState.selectedPerson)?.classList.remove('selected');
+  }
+
+  if (gameState.selectedPerson === personId) {
+    gameState.selectedPerson = null;
+    return;
+  }
+
+  gameState.selectedPerson = personId;
+  document.getElementById('person-' + personId).classList.add('selected');
+  document.getElementById('game-hint').textContent = '🐶 Now tap the matching dog!';
+}
+
+function selectDog(dogId) {
+  if (!gameState.selectedPerson) {
+    // Select dog first — reverse flow
+    toast('👆 Tap a person first!');
+    return;
+  }
+
+  const personId = gameState.selectedPerson;
+
+  // Remove any existing match for this person or this dog
+  for (const [pid, did] of Object.entries(gameState.matches)) {
+    if (parseInt(pid) === personId || parseInt(did) === dogId) {
+      delete gameState.matches[pid];
+      document.getElementById('person-' + pid)?.classList.remove('matched');
+      document.getElementById('dog-' + did)?.classList.remove('matched');
+      document.getElementById('connector-' + pid)?.classList.remove('connected');
+      document.getElementById('cdot-' + pid)?.classList.remove('connected');
+    }
+  }
+
+  gameState.matches[personId] = dogId;
+  gameState.selectedPerson = null;
+
+  // Animate match
+  const pEl = document.getElementById('person-' + personId);
+  const dEl = document.getElementById('dog-' + dogId);
+  pEl?.classList.remove('selected');
+  pEl?.classList.add('matched', 'pop');
+  dEl?.classList.add('matched', 'pop');
+  document.getElementById('connector-' + personId)?.classList.add('connected');
+  document.getElementById('cdot-' + personId)?.classList.add('connected');
+  setTimeout(() => { pEl?.classList.remove('pop'); dEl?.classList.remove('pop'); }, 350);
+
+  document.getElementById('game-hint').textContent = '✅ Matched! Keep going…';
+  updateSubmitBtn();
+  updateProgressDots();
+}
+
+function isPersonMatched(personId) {
+  return personId in gameState.matches;
+}
+
+function updateProgressDots() {
+  const matched = Object.keys(gameState.matches).length;
+  for (let i = 0; i < gameState.count; i++) {
+    const dot = document.getElementById('pdot-' + i);
+    if (dot) dot.classList.toggle('done', i < matched);
+  }
+}
+
+function updateSubmitBtn() {
+  const matched = Object.keys(gameState.matches).length;
+  const btn = document.getElementById('submit-btn');
+  const ready = matched >= gameState.count;
+  btn.disabled = !ready;
+  btn.style.opacity = ready ? '1' : '0.5';
+  btn.textContent = ready ? '✅ Submit Matches!' : `Match All Pairs to Submit (${matched}/${gameState.count})`;
+}
+
+function startTimer() {
+  clearInterval(timerInterval);
+  const el = document.getElementById('game-timer');
+  timerInterval = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - gameState.startTime) / 1000);
+    const m = Math.floor(elapsed / 60);
+    const s = elapsed % 60;
+    el.textContent = `⏱ ${m}:${String(s).padStart(2,'0')}`;
+    el.classList.toggle('warn', elapsed > 60);
+  }, 1000);
+}
+
+function quitGame() {
+  clearInterval(timerInterval);
+  go('s-home');
+}
+
+async function submitGame() {
+  clearInterval(timerInterval);
+  const timeSecs = Math.floor((Date.now() - gameState.startTime) / 1000);
+
+  const matches = Object.entries(gameState.matches).map(([pid, did]) => ({
+    person_id: parseInt(pid),
+    dog_id: parseInt(did),
+  }));
+
+  showLoader();
+  const data = await api('POST', '/api/game/submit', { matches, time_seconds: timeSecs });
+  hideLoader();
+
+  if (data.error) { toast('❌ Submit failed'); return; }
+
+  // Update local user state
+  user.xp = data.new_xp;
+  user.level = data.new_level;
+  user.level_title = data.new_level_title;
+  user.xp_for_next = data.xp_for_next;
+
+  renderResults(data, timeSecs);
+  go('s-results');
+}
+
+function renderResults(data, timeSecs) {
+  const { score, total, xp_earned, results, new_xp, new_level, new_level_title, xp_for_next, leveled_up, new_badges } = data;
+
+  // Stars
+  const pct = score / total;
+  const stars = pct === 1 ? '⭐⭐⭐' : pct >= 0.6 ? '⭐⭐' : '⭐';
+  document.getElementById('res-stars').textContent = stars;
+
+  document.getElementById('res-score').textContent = `${score} / ${total}`;
+  const msgs = ['Better luck next time 🐾', 'Good effort! 🐾', 'Nice matching! 🐶', 'Great round! 🌟', 'Incredible! 🏆'];
+  document.getElementById('res-msg').textContent = msgs[Math.min(score, msgs.length-1)];
+  document.getElementById('res-xp').textContent = `⚡ +${xp_earned} XP`;
+
+  // Level bar
+  const xpPct = Math.min(100, Math.round((new_xp / xp_for_next) * 100));
+  document.getElementById('res-level').textContent = `⭐ Lv ${new_level} · ${new_level_title}`;
+  document.getElementById('res-next-level').textContent = `${xp_for_next - new_xp} XP to next level`;
+  document.getElementById('res-xp-fill').style.width = xpPct + '%';
+  document.getElementById('res-xp-detail').textContent = `${new_xp} / ${xp_for_next} XP`;
+
+  // Level up
+  const lup = document.getElementById('res-levelup');
+  if (leveled_up) {
+    lup.style.display = 'block';
+    document.getElementById('res-levelup-title').textContent = `You reached ${new_level_title}!`;
+  } else {
+    lup.style.display = 'none';
+  }
+
+  // Badges
+  const badgesWrap = document.getElementById('res-badges-wrap');
+  badgesWrap.innerHTML = (new_badges || []).map(b => `
+    <div class="badge-unlock-card" style="margin-bottom:10px;">
+      <div class="buc-icon">${b.emoji}</div>
+      <div class="buc-info">
+        <div class="buc-new">🎉 Badge Unlocked!</div>
+        <div class="buc-name">${esc(b.label)}</div>
+        <div class="buc-desc">${esc(b.desc)}</div>
+      </div>
+    </div>`).join('');
+
+  // Results list — need pair info from gameState
+  const personMap = {};
+  const dogMap = {};
+  gameState.persons.forEach(p => personMap[p.id] = p);
+  gameState.dogs.forEach(d => dogMap[d.id] = d);
+
+  document.getElementById('res-list').innerHTML = results.map(r => {
+    const p = personMap[r.person_id];
+    const d = dogMap[r.dog_id];
+    if (!p || !d) return '';
+    return `
+      <div class="res-row">
+        <div class="res-photos">
+          <div class="res-photo">${p.photo ? `<img src="${p.photo}" alt="">` : '🧑'}</div>
+          <div class="res-arrow">→</div>
+          <div class="res-photo">${d.photo ? `<img src="${d.photo}" alt="">` : '🐶'}</div>
+        </div>
+        <div class="res-names">
+          <div class="res-pair">${esc(p.name)} → ${esc(d.name)}</div>
+        </div>
+        <div class="res-outcome">${r.correct ? '✅' : '❌'}</div>
+      </div>`;
+  }).join('');
+
+  // Sponsor moment on perfect round or every 5th round
+  const sponsorEl = document.getElementById('res-sponsor');
+  if (score === total || roundCount % 5 === 0) {
+    sponsorEl.style.display = 'flex';
+  } else {
+    sponsorEl.style.display = 'none';
+  }
+}
+
+// ═══════════════════════════════════════════
+//  PROFILE
+// ═══════════════════════════════════════════
+async function loadProfile() {
+  if (!user) return;
+  const u = user;
+  setAvi('prof-avi', u.avatar, '🧑');
+  document.getElementById('prof-name').textContent = u.username;
+  document.getElementById('prof-level-chip').textContent = `⭐ Lv ${u.level} · ${u.level_title}`;
+  const xpPct = Math.min(100, Math.round((u.xp / u.xp_for_next) * 100));
+  document.getElementById('prof-xp-fill').style.width = xpPct + '%';
+  document.getElementById('prof-xp-txt').textContent = `${u.xp} / ${u.xp_for_next}`;
+
+  // Completion meter
+  const pairs = (await api('GET', '/api/photos')).pairs || [];
+  const items = [
+    { label: 'Add profile photo', done: !!u.avatar },
+    { label: "Add your pet's name", done: !!u.pet_name },
+    { label: "Add your pet's breed (+50 XP)", done: !!u.pet_breed },
+    { label: 'Upload 3 photo pairs', done: pairs.length >= 3 },
+    { label: 'Upload 5+ photo pairs (+100 XP)', done: pairs.length >= 5 },
+    { label: 'Play your first round', done: (await api('GET', '/api/game/stats')).total_rounds > 0 },
+  ];
+  const doneCount = items.filter(i => i.done).length;
+  const pct = Math.round((doneCount / items.length) * 100);
+  document.getElementById('prof-completion-pct').textContent = pct + '%';
+  document.getElementById('prof-completion-fill').style.width = pct + '%';
+  document.getElementById('prof-completion-items').innerHTML = items.map(i => `
+    <div class="cc-item ${i.done ? '' : 'cc-pending'}">
+      <span class="cc-check">${i.done ? '✅' : '⬜'}</span>
+      ${esc(i.label)}
+    </div>`).join('');
+
+  // Badges
+  const { badges } = await api('GET', '/api/game/badges');
+  document.getElementById('prof-badges').innerHTML = badges.map(b => `
+    <div class="badge-cell ${b.earned ? 'earned' : 'locked'}" title="${esc(b.desc)}">
+      <div class="bc-icon">${b.emoji}</div>
+      <div class="bc-name">${esc(b.label)}</div>
+    </div>`).join('');
+
+  // Pet collection
+  const { collection } = await api('GET', '/api/pets/collection');
+  document.getElementById('prof-coll-count').textContent = `${collection.length} collected`;
+  const locked = Math.max(0, 5 - collection.length);
+  document.getElementById('prof-coll').innerHTML =
+    collection.map(p => `
+      <div class="pet-card">
+        <div class="pc-icon">${p.pet_emoji}</div>
+        <div class="pc-name">${esc(p.pet_name)}</div>
+      </div>`).join('') +
+    Array.from({length: locked}, (_, i) => `
+      <div class="pet-card locked">
+        <div class="pc-icon">🔒</div>
+        <div class="pc-name">Day ${collection.length + i + 1}</div>
+      </div>`).join('');
+}
+
+// ═══════════════════════════════════════════
+//  PHOTO HELPERS
+// ═══════════════════════════════════════════
+function previewAvatar(input, circleId, b64Id) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById(b64Id).value = e.target.result;
+    const circle = document.getElementById(circleId);
+    circle.innerHTML = `<img src="${e.target.result}" alt="avatar">`;
+  };
+  reader.readAsDataURL(file);
+}
+
+function previewUpload(input, circleId, b64Id) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById(b64Id).value = e.target.result;
+    const circle = document.getElementById(circleId);
+    circle.innerHTML = `<img src="${e.target.result}" alt="upload" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+  };
+  reader.readAsDataURL(file);
+}
+
+function setAvi(elId, src, fallback) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (src) el.innerHTML = `<img src="${src}" alt="avatar">`;
+  else el.textContent = fallback;
+}
+
+function photoEl(src) {
+  if (!src) return '🧑';
+  return `<img src="${src}" alt="" style="width:100%;height:100%;object-fit:cover;">`;
+}
+
+// ═══════════════════════════════════════════
+//  LIGHTBOX
+// ═══════════════════════════════════════════
+function lightbox(src, emoji) {
+  const lb = document.getElementById('lightbox');
+  const img = document.getElementById('lightbox-img');
+  const em = document.getElementById('lightbox-emoji');
+  if (src) { img.src = src; img.style.display='block'; em.style.display='none'; }
+  else { img.style.display='none'; em.textContent=emoji; em.style.display='block'; }
+  lb.classList.add('show');
+}
+function closeLightbox() { document.getElementById('lightbox').classList.remove('show'); }
+
+// ═══════════════════════════════════════════
+//  DRAG-AND-DROP (basic)
+// ═══════════════════════════════════════════
+let dragState = null;
+function startDrag(e, id, type) {
+  // Minimal drag: on touchend/mouseup on opposite type = match
+  dragState = { id, type };
+}
+document.addEventListener('mouseup', handleDragEnd);
+document.addEventListener('touchend', handleDragEnd);
+function handleDragEnd(e) {
+  if (!dragState) return;
+  // Check if we ended on an opposite element
+  const target = document.elementFromPoint(
+    e.clientX || (e.changedTouches && e.changedTouches[0].clientX),
+    e.clientY || (e.changedTouches && e.changedTouches[0].clientY)
+  );
+  if (!target) { dragState = null; return; }
+  const personEl = target.closest('[id^="person-"]');
+  const dogEl = target.closest('[id^="dog-"]');
+  if (dragState.type === 'person' && dogEl) {
+    const dogId = parseInt(dogEl.id.replace('dog-',''));
+    gameState.selectedPerson = dragState.id;
+    selectDog(dogId);
+  } else if (dragState.type === 'dog' && personEl) {
+    const personId = parseInt(personEl.id.replace('person-',''));
+    gameState.selectedPerson = personId;
+    selectDog(dragState.id);
+  }
+  dragState = null;
+}
+
+// ═══════════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════════
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ═══════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════
+(async function init() {
+  const authed = await checkAuth();
+  if (authed) {
+    await loadHome();
+    go('s-home');
+  } else {
+    go('s-welcome');
+  }
+
+  // Wire up photos screen on navigation
+  document.getElementById('s-photos').addEventListener('transitionend', () => {});
+})();
+
+// Load photos when navigating to photos screen
+const origGo = go;
+window.go = function(screenId) {
+  origGo(screenId);
+  if (screenId === 's-photos') loadPhotos();
+  if (screenId === 's-profile') loadProfile();
+  if (screenId === 's-home' && user) loadHome();
+};
+</script>
+</body>
+</html>
