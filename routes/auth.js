@@ -60,6 +60,46 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// POST /api/auth/demo - instant demo login, no password needed
+router.post('/demo', async (req, res) => {
+  try {
+    const DEMO_USERNAME = 'DemoPlayer';
+    const DEMO_EMAIL = 'demo@mutt-match.app';
+
+    let user = queryOne('SELECT * FROM users WHERE username = ?', [DEMO_USERNAME]);
+
+    if (!user) {
+      const password_hash = await bcrypt.hash('demo-locked-' + Date.now(), 10);
+      run(
+        `INSERT INTO users (username, email, password_hash, pet_name, pet_breed, xp, level)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [DEMO_USERNAME, DEMO_EMAIL, password_hash, 'Biscuit', 'Golden Retriever', 450, 5]
+      );
+      user = queryOne('SELECT * FROM users WHERE username = ?', [DEMO_USERNAME]);
+
+      const demoPairs = [
+        ['Alex', null, 'Biscuit', null],
+        ['Jordan', null, 'Noodle', null],
+        ['Sam', null, 'Pretzel', null],
+        ['Riley', null, 'Waffles', null],
+        ['Morgan', null, 'Pickles', null],
+      ];
+      for (const [pn, pp, dn, dp] of demoPairs) {
+        run(
+          `INSERT INTO photo_pairs (user_id, person_name, person_photo, dog_name, dog_photo) VALUES (?, ?, ?, ?, ?)`,
+          [user.id, pn, pp, dn, dp]
+        );
+      }
+    }
+
+    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '2h' });
+    res.json({ token, user: safeUser(user) });
+  } catch (err) {
+    console.error('Demo login error:', err);
+    res.status(500).json({ error: 'Demo login failed' });
+  }
+});
+
 // GET /api/auth/me
 router.get('/me', requireAuth, (req, res) => {
   const user = queryOne('SELECT * FROM users WHERE id = ?', [req.userId]);
