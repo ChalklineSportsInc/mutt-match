@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mutt Match — Try Demo</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  min-height:100vh; background:linear-gradient(160deg,#6A0DAD,#FF6B6B 60%,#FFD93D);
+  display:flex; align-items:center; justify-content:center;
+  font-family:'Nunito',sans-serif;
+}
+.card {
+  width:min(360px,92vw); background:rgba(255,255,255,.15);
+  backdrop-filter:blur(16px); border-radius:28px;
+  padding:42px 32px; text-align:center;
+  box-shadow:0 20px 60px rgba(0,0,0,.3);
+}
+.paw { font-size:68px; animation:float 3s ease-in-out infinite; }
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+h1 { font-family:'Fredoka One',cursive; font-size:44px; color:#fff; margin:10px 0 6px; }
+p { color:rgba(255,255,255,.85); font-size:15px; line-height:1.5; margin-bottom:28px; }
+.btn {
+  display:block; width:100%; padding:17px; border:none; border-radius:50px;
+  font-family:'Nunito',sans-serif; font-weight:900; font-size:18px;
+  cursor:pointer; transition:transform .15s, opacity .15s;
+}
+.btn:active { transform:scale(.97); }
+.btn-demo { background:#FFD93D; color:#2D2D44; margin-bottom:14px; }
+.btn-signup { background:rgba(255,255,255,.2); color:#fff; font-size:15px; padding:13px; }
+.status { color:rgba(255,255,255,.75); font-size:13px; font-weight:700; margin-top:16px; min-height:20px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="paw">🐾</div>
+  <h1>Mutt Match</h1>
+  <p>Can you match the dog owner to their dog? Tap below to explore the prototype instantly — no account needed.</p>
+  <button class="btn btn-demo" onclick="startDemo()">👀 &nbsp;Explore Demo</button>
+  <button class="btn btn-signup" onclick="location.href='/'">🐶 &nbsp;Create an Account</button>
+  <div class="status" id="status"></div>
+</div>
+<script>
+async function startDemo() {
+  document.getElementById('status').textContent = 'Loading demo...';
+  try {
+    const r = await fetch('/api/auth/demo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+    const d = await r.json();
+    if (d.token) {
+      localStorage.setItem('mm_token', d.token);
+      location.href = '/';
+    } else {
+      document.getElementById('status').textContent = 'Error: ' + (d.error || 'try again');
+    }
+  } catch(e) {
+    document.getElementById('status').textContent = 'Could not connect, please refresh.';
+  }
+}
+</script>
+</body>
+</html>
