@@ -62,6 +62,19 @@ body { display:flex; justify-content:center; align-items:center; font-family:'Nu
 .nav-icon { font-size:22px; }
 .nav-label { font-size:10px; font-weight:700; color:#bbb; }
 .nav-item.active .nav-label { color:var(--purple); }
+/* ── Demo Banner ── */
+#demo-banner {
+  display:none; position:fixed; top:0; left:50%; transform:translateX(-50%);
+  z-index:10000; width:min(390px,100vw);
+  background:rgba(45,45,68,.92); backdrop-filter:blur(8px);
+  padding:10px 18px 8px;
+  align-items:center; justify-content:space-between;
+  border-bottom:2px solid rgba(255,217,61,.4);
+}
+#demo-banner.show { display:flex; }
+.demo-label { font-size:11px; font-weight:800; color:rgba(255,217,61,.9); text-transform:uppercase; letter-spacing:1px; }
+.demo-back { background:rgba(255,255,255,.15); border:none; color:#fff; border-radius:50px; padding:5px 14px; font-size:12px; font-weight:800; cursor:pointer; font-family:'Nunito',sans-serif; }
+.demo-back:active { opacity:.7; }
 /* ── Toast ── */
 #toast { position:fixed; bottom:100px; left:50%; transform:translateX(-50%) translateY(20px); background:var(--dark); color:#fff; padding:12px 24px; border-radius:50px; font-weight:700; font-size:14px; opacity:0; transition:all .3s; pointer-events:none; z-index:9999; white-space:nowrap; }
 #toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
@@ -271,6 +284,10 @@ body { display:flex; justify-content:center; align-items:center; font-family:'Nu
 <body>
 <div id="toast"></div>
 <div class="loader" id="loader"><div class="spinner"></div></div>
+<div id="demo-banner">
+  <span class="demo-label">👀 Demo Mode</span>
+  <button class="demo-back" onclick="exitDemo()">← Back to Start</button>
+</div>
 <div id="lightbox" onclick="closeLightbox()"><img id="lightbox-img" src="" alt=""><span id="lightbox-emoji"></span></div>
 
 <div class="app" id="app">
@@ -282,9 +299,10 @@ body { display:flex; justify-content:center; align-items:center; font-family:'Nu
     <div class="welcome-title">Mutt<br>Match</div>
     <div class="welcome-sub">Can you match the owner<br>to their dog? Let's find out.</div>
     <div class="welcome-actions">
+      <button class="btn btn-yellow btn-full" style="font-size:19px;padding:19px;" onclick="tryDemo()">👀 &nbsp;Explore Demo</button>
+      <div class="divider">want to save your progress?</div>
       <button class="btn btn-primary btn-full" onclick="go('s-signup')">🐶 Create Account</button>
-      <div class="divider">already have an account?</div>
-      <button class="btn btn-secondary btn-full" onclick="showLogin()">Log In</button>
+      <button class="btn btn-ghost btn-full" onclick="showLogin()">Log In</button>
     </div>
   </div>
 </div>
@@ -666,6 +684,7 @@ function showLogin() { go('s-login'); }
 function doLogout() {
   token = null; user = null;
   localStorage.removeItem('mm_token');
+  document.getElementById('demo-banner').classList.remove('show');
   go('s-welcome');
 }
 
