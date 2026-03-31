@@ -681,6 +681,29 @@ async function doLogin() {
 
 function showLogin() { go('s-login'); }
 
+async function tryDemo() {
+  showLoader();
+  try {
+    const data = await api('POST', '/api/auth/demo', {});
+    hideLoader();
+    if (data.error) { toast('Demo unavailable, try refreshing'); return; }
+    token = data.token;
+    user = data.user;
+    document.getElementById('demo-banner').classList.add('show');
+    await loadHome();
+    go('s-home');
+  } catch(e) {
+    hideLoader();
+    toast('Could not load demo, please try again');
+  }
+}
+
+function exitDemo() {
+  token = null; user = null;
+  document.getElementById('demo-banner').classList.remove('show');
+  go('s-welcome');
+}
+
 function doLogout() {
   token = null; user = null;
   localStorage.removeItem('mm_token');
