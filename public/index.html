@@ -972,6 +972,9 @@ function selectDog(dogId) {
   gameState.matches[personId] = dogId;
   gameState.selectedPerson = null;
 
+  // Swap matched dog into same row as person so the connector line is correct
+  swapDogToRow(personId, dogId);
+
   // Animate match
   const pEl = document.getElementById('person-' + personId);
   const dEl = document.getElementById('dog-' + dogId);
@@ -985,6 +988,20 @@ function selectDog(dogId) {
   document.getElementById('game-hint').textContent = '✅ Matched! Keep going…';
   updateSubmitBtn();
   updateProgressDots();
+}
+
+function swapDogToRow(personId, dogId) {
+  const personRow = document.getElementById('row-' + personId);
+  const dogEl = document.getElementById('dog-' + dogId);
+  if (!personRow || !dogEl) return;
+  const existingDog = personRow.querySelector('[id^="dog-"]');
+  if (!existingDog || existingDog === dogEl) return;
+  // Swap the two dog elements between their rows
+  const dogParentRow = dogEl.parentElement;
+  const placeholder = document.createElement('span');
+  dogParentRow.insertBefore(placeholder, dogEl);
+  personRow.replaceChild(dogEl, existingDog);
+  dogParentRow.replaceChild(existingDog, placeholder);
 }
 
 function isPersonMatched(personId) {
