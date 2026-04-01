@@ -202,8 +202,9 @@ body { display:flex; justify-content:center; align-items:center; font-family:'Nu
 .match-card:active { transform:scale(.96); }
 .match-card .cpic { width:54px; height:54px; flex-shrink:0; }
 .match-card .card-name { font-size:11px; font-weight:700; color:#fff; text-align:center; line-height:1.2; }
-.match-card.selected { border-color:var(--yellow); box-shadow:0 0 0 3px rgba(255,217,61,.45); transform:scale(1.05); }
-.match-card.matched { border-color:rgba(255,255,255,.5); }
+@keyframes pulse-sel { 0%,100%{box-shadow:0 0 0 4px rgba(255,217,61,.8),0 0 18px rgba(255,217,61,.5);} 50%{box-shadow:0 0 0 8px rgba(255,217,61,.3),0 0 32px rgba(255,217,61,.7);} }
+.match-card.selected { background:rgba(255,217,61,.3) !important; border-color:var(--yellow) !important; border-width:3px; transform:scale(1.08); animation:pulse-sel 1s ease-in-out infinite; }
+.match-card.matched { opacity:.9; }
 .game-footer { padding:12px 18px 28px; flex-shrink:0; }
 @keyframes matchPop { 0%{transform:scale(1)} 40%{transform:scale(1.18)} 100%{transform:scale(1)} }
 .pop { animation:matchPop .3s ease; }
@@ -952,19 +953,19 @@ function drawMatchLines() {
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.setAttribute('d', `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`);
     path.setAttribute('stroke', color);
-    path.setAttribute('stroke-width', '3.5');
+    path.setAttribute('stroke-width', '5');
     path.setAttribute('fill', 'none');
     path.setAttribute('stroke-linecap', 'round');
-    path.setAttribute('opacity', '0.95');
+    path.setAttribute('opacity', '1');
     svg.appendChild(path);
     [x1, y1, x2, y2].forEach((_, i, a) => {
       if (i % 2 !== 0) return;
       const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-      dot.setAttribute('cx', a[i]); dot.setAttribute('cy', a[i+1]); dot.setAttribute('r', '5');
+      dot.setAttribute('cx', a[i]); dot.setAttribute('cy', a[i+1]); dot.setAttribute('r', '8');
       dot.setAttribute('fill', color); svg.appendChild(dot);
     });
-    pEl.style.borderColor = color;
-    dEl.style.borderColor = color;
+    pEl.style.borderColor = color; pEl.style.borderWidth = '3px'; pEl.style.background = color + '44';
+    dEl.style.borderColor = color; dEl.style.borderWidth = '3px'; dEl.style.background = color + '44';
   }
 }
 
@@ -975,8 +976,8 @@ function selectPerson(personId) {
         delete gameState.matches[pid];
         const pEl = document.getElementById('person-' + pid);
         const dEl = document.getElementById('dog-' + did);
-        pEl?.classList.remove('matched'); pEl && (pEl.style.borderColor = '');
-        dEl?.classList.remove('matched'); dEl && (dEl.style.borderColor = '');
+        pEl?.classList.remove('matched'); if(pEl){pEl.style.borderColor='';pEl.style.borderWidth='';pEl.style.background='';}
+        dEl?.classList.remove('matched'); if(dEl){dEl.style.borderColor='';dEl.style.borderWidth='';dEl.style.background='';}
         drawMatchLines();
         updateSubmitBtn(); updateProgressDots();
         break;
