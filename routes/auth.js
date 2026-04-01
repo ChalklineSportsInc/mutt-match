@@ -17,7 +17,7 @@ router.post('/signup', async (req, res) => {
     const existing = queryOne('SELECT id FROM users WHERE username = ? OR email = ?', [username, email]);
     if (existing) return res.status(409).json({ error: 'Username or email already taken' });
     const password_hash = await bcrypt.hash(password, 10);
-    run(`INSERT INTO users (username, email, password_hash, avatar, pet_name, pet_breed) VALUES (?, ?, ?, ?, ?, ?)`,
+    run('INSERT INTO users (username, email, password_hash, avatar, pet_name, pet_breed) VALUES (?, ?, ?, ?, ?, ?)',
       [username, email, password_hash, avatar || null, pet_name || null, pet_breed || null]);
     const user = queryOne('SELECT * FROM users WHERE username = ?', [username]);
     const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
@@ -45,60 +45,36 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// POST /api/auth/demo
+// POST /api/auth/demo — hardcoded photos, no external fetching
 router.post('/demo', async (req, res) => {
   try {
     const DEMO_USERNAME = 'DemoPlayer';
     const DEMO_EMAIL = 'demo@mutt-match.app';
 
+    // Hardcoded verified photo pairs
+    const DEMO_PAIRS = [
+      { pn: 'Sarah',  pp: 'https://randomuser.me/api/portraits/women/44.jpg', dn: 'Biscuit', dp: 'https://images.dog.ceo/breeds/husky/n02110185_10047.jpg' },
+      { pn: 'Marcus', pp: 'https://randomuser.me/api/portraits/men/32.jpg',   dn: 'Noodle',  dp: 'https://images.dog.ceo/breeds/retriever-golden/n02099601_3004.jpg' },
+      { pn: 'Emma',   pp: 'https://randomuser.me/api/portraits/women/68.jpg', dn: 'Waffles', dp: 'https://images.dog.ceo/breeds/pug/n02110958_15626.jpg' },
+      { pn: 'Derek',  pp: 'https://randomuser.me/api/portraits/men/75.jpg',   dn: 'Pretzel', dp: 'https://images.dog.ceo/breeds/beagle/n02088364_11136.jpg' },
+      { pn: 'Aisha',  pp: 'https://randomuser.me/api/portraits/women/12.jpg', dn: 'Churro',  dp: 'https://images.dog.ceo/breeds/bulldog-french/n02108915_618.jpg' },
+    ];
+
     let user = queryOne('SELECT * FROM users WHERE username = ?', [DEMO_USERNAME]);
-    const hasRealPhotos = user &&
-      queryOne('SELECT id FROM photo_pairs WHERE user_id = ? AND person_photo IS NOT NULL AND person_photo != ""', [user.id]);
+    const hasPhotos = user && queryOne('SELECT id FROM photo_pairs WHERE user_id = ? AND person_photo IS NOT NULL', [user.id]);
 
     if (!user) {
-      const password_hash = await bcrypt.hash('demo-locked-' + Date.now(), 10);
-      run(`INSERT INTO users (username, email, password_hash, pet_name, pet_breed, xp, level, current_streak, longest_streak)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      const password_hash = await bcrypt.hash('demo-locked', 10);
+      run('INSERT INTO users (username, email, password_hash, pet_name, pet_breed, xp, level, current_streak, longest_streak) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [DEMO_USERNAME, DEMO_EMAIL, password_hash, 'Biscuit', 'Golden Retriever', 1250, 5, 3, 7]);
       user = queryOne('SELECT * FROM users WHERE username = ?', [DEMO_USERNAME]);
     }
 
-    if (!hasRealPhotos) {
+    if (!hasPhotos) {
       run('DELETE FROM photo_pairs WHERE user_id = ?', [user.id]);
-
-      const dogNames = ['Biscuit', 'Noodle', 'Waffles', 'Pretzel', 'Pickles', 'Mochi', 'Boba', 'Churro'];
-      let seeded = false;
-
-      try {
-        const [peopleResp, dogsResp] = await Promise.all([
-          fetch('https://randomuser.me/api/?results=8&nat=us,gb,au&inc=name,picture'),
-          fetch('https://dog.ceo/api/breeds/image/random/8')
-        ]);
-        const peopleData = await peopleResp.json();
-        const dogsData = await dogsResp.json();
-
-        if (peopleData?.results && dogsData?.message) {
-          const count = Math.min(8, peopleData.results.length, dogsData.message.length);
-          for (let i = 0; i < count; i++) {
-            run(`INSERT INTO photo_pairs (user_id, person_name, person_photo, dog_name, dog_photo) VALUES (?, ?, ?, ?, ?)`,
-              [user.id, peopleData.results[i].name.first, peopleData.results[i].picture.large,
-               dogNames[i], dogsData.message[i]]);
-          }
-          seeded = true;
-        }
-      } catch (e) {
-        console.error('Failed to fetch demo photos:', e.message);
-      }
-
-      if (!seeded) {
-        const fallbackNames = ['Alex', 'Jordan', 'Sam', 'Riley', 'Morgan', 'Casey', 'Taylor', 'Drew'];
-        for (let i = 0; i < 8; i++) {
-          run(`INSERT INTO photo_pairs (user_id, person_name, person_photo, dog_name, dog_photo) VALUES (?, ?, ?, ?, ?)`,
-            [user.id, fallbackNames[i],
-             `https://i.pravatar.cc/300?img=${i + 10}`,
-             dogNames[i],
-             `https://placedog.net/300/300?id=${i + 1}`]);
-        }
+      for (const p of DEMO_PAIRS) {
+        run('INSERT INTO photo_pairs (user_id, person_name, person_photo, dog_name, dog_photo) VALUES (?, ?, ?, ?, ?)',
+          [user.id, p.pn, p.pp, p.dn, p.dp]);
       }
     }
 
