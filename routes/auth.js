@@ -10,24 +10,15 @@ const JWT_SECRET = process.env.JWT_SECRET || 'mutt-match-secret-change-in-produc
 router.post('/signup', async (req, res) => {
   try {
     const { username, email, password, pet_name, pet_breed, avatar } = req.body;
-
     if (!username || !email || !password)
       return res.status(400).json({ error: 'Username, email, and password are required' });
     if (password.length < 6)
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
-
-    const existing = queryOne(
-      'SELECT id FROM users WHERE username = ? OR email = ?', [username, email]
-    );
-    if (existing)
-      return res.status(409).json({ error: 'Username or email already taken' });
-
+    const existing = queryOne('SELECT id FROM users WHERE username = ? OR email = ?', [username, email]);
+    if (existing) return res.status(409).json({ error: 'Username or email already taken' });
     const password_hash = await bcrypt.hash(password, 10);
-    run(
-      `INSERT INTO users (username, email, password_hash, avatar, pet_name, pet_breed) VALUES (?, ?, ?, ?, ?, ?)`,
-      [username, email, password_hash, avatar || null, pet_name || null, pet_breed || null]
-    );
-
+    run(`INSERT INTO users (username, email, password_hash, avatar, pet_name, pet_breed) VALUES (?, ?, ?, ?, ?, ?)`,
+      [username, email, password_hash, avatar || null, pet_name || null, pet_breed || null]);
     const user = queryOne('SELECT * FROM users WHERE username = ?', [username]);
     const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
     res.json({ token, user: safeUser(user) });
@@ -41,17 +32,11 @@ router.post('/signup', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
-    if (!username || !password)
-      return res.status(400).json({ error: 'Username and password required' });
-
-    const user = queryOne(
-      'SELECT * FROM users WHERE username = ? OR email = ?', [username, username]
-    );
+    if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
+    const user = queryOne('SELECT * FROM users WHERE username = ? OR email = ?', [username, username]);
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
-
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
-
     const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
     res.json({ token, user: safeUser(user) });
   } catch (err) {
@@ -60,35 +45,60 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// POST /api/auth/demo - instant demo login, no password needed
+// POST /api/auth/demo
 router.post('/demo', async (req, res) => {
   try {
     const DEMO_USERNAME = 'DemoPlayer';
     const DEMO_EMAIL = 'demo@mutt-match.app';
 
     let user = queryOne('SELECT * FROM users WHERE username = ?', [DEMO_USERNAME]);
+    const hasRealPhotos = user &&
+      queryOne('SELECT id FROM photo_pairs WHERE user_id = ? AND person_photo IS NOT NULL AND person_photo != ""', [user.id]);
 
     if (!user) {
       const password_hash = await bcrypt.hash('demo-locked-' + Date.now(), 10);
-      run(
-        `INSERT INTO users (username, email, password_hash, pet_name, pet_breed, xp, level)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [DEMO_USERNAME, DEMO_EMAIL, password_hash, 'Biscuit', 'Golden Retriever', 450, 5]
-      );
+      run(`INSERT INTO users (username, email, password_hash, pet_name, pet_breed, xp, level, current_streak, longest_streak)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [DEMO_USERNAME, DEMO_EMAIL, password_hash, 'Biscuit', 'Golden Retriever', 1250, 5, 3, 7]);
       user = queryOne('SELECT * FROM users WHERE username = ?', [DEMO_USERNAME]);
+    }
 
-      const demoPairs = [
-        ['Alex', null, 'Biscuit', null],
-        ['Jordan', null, 'Noodle', null],
-        ['Sam', null, 'Pretzel', null],
-        ['Riley', null, 'Waffles', null],
-        ['Morgan', null, 'Pickles', null],
-      ];
-      for (const [pn, pp, dn, dp] of demoPairs) {
-        run(
-          `INSERT INTO photo_pairs (user_id, person_name, person_photo, dog_name, dog_photo) VALUES (?, ?, ?, ?, ?)`,
-          [user.id, pn, pp, dn, dp]
-        );
+    if (!hasRealPhotos) {
+      run('DELETE FROM photo_pairs WHERE user_id = ?', [user.id]);
+
+      const dogNames = ['Biscuit', 'Noodle', 'Waffles', 'Pretzel', 'Pickles', 'Mochi', 'Boba', 'Churro'];
+      let seeded = false;
+
+      try {
+        const [peopleResp, dogsResp] = await Promise.all([
+          fetch('https://randomuser.me/api/?results=8&nat=us,gb,au&inc=name,picture'),
+          fetch('https://dog.ceo/api/breeds/image/random/8')
+        ]);
+        const peopleData = await peopleResp.json();
+        const dogsData = await dogsResp.json();
+
+        if (peopleData?.results && dogsData?.message) {
+          const count = Math.min(8, peopleData.results.length, dogsData.message.length);
+          for (let i = 0; i < count; i++) {
+            run(`INSERT INTO photo_pairs (user_id, person_name, person_photo, dog_name, dog_photo) VALUES (?, ?, ?, ?, ?)`,
+              [user.id, peopleData.results[i].name.first, peopleData.results[i].picture.large,
+               dogNames[i], dogsData.message[i]]);
+          }
+          seeded = true;
+        }
+      } catch (e) {
+        console.error('Failed to fetch demo photos:', e.message);
+      }
+
+      if (!seeded) {
+        const fallbackNames = ['Alex', 'Jordan', 'Sam', 'Riley', 'Morgan', 'Casey', 'Taylor', 'Drew'];
+        for (let i = 0; i < 8; i++) {
+          run(`INSERT INTO photo_pairs (user_id, person_name, person_photo, dog_name, dog_photo) VALUES (?, ?, ?, ?, ?)`,
+            [user.id, fallbackNames[i],
+             `https://i.pravatar.cc/300?img=${i + 10}`,
+             dogNames[i],
+             `https://placedog.net/300/300?id=${i + 1}`]);
+        }
       }
     }
 
@@ -111,19 +121,10 @@ function safeUser(user) {
   const level = user.level || 1;
   const xp = user.xp || 0;
   return {
-    id: user.id,
-    username: user.username,
-    email: user.email,
-    avatar: user.avatar,
-    pet_name: user.pet_name,
-    pet_breed: user.pet_breed,
-    location: user.location,
-    xp,
-    level,
-    level_title: levelTitle(level),
-    xp_for_next: xpForLevel(level + 1),
-    current_streak: user.current_streak || 0,
-    longest_streak: user.longest_streak || 0,
+    id: user.id, username: user.username, email: user.email, avatar: user.avatar,
+    pet_name: user.pet_name, pet_breed: user.pet_breed, location: user.location,
+    xp, level, level_title: levelTitle(level), xp_for_next: xpForLevel(level + 1),
+    current_streak: user.current_streak || 0, longest_streak: user.longest_streak || 0,
     created_at: user.created_at,
   };
 }
@@ -133,12 +134,9 @@ function requireAuth(req, res, next) {
   if (!header) return res.status(401).json({ error: 'No token' });
   try {
     const decoded = jwt.verify(header.replace('Bearer ', ''), JWT_SECRET);
-    req.userId = decoded.id;
-    req.username = decoded.username;
+    req.userId = decoded.id; req.username = decoded.username;
     next();
-  } catch {
-    res.status(401).json({ error: 'Invalid token' });
-  }
+  } catch { res.status(401).json({ error: 'Invalid token' }); }
 }
 
 module.exports = router;
