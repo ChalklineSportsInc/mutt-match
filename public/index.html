@@ -195,14 +195,15 @@ body { display:flex; justify-content:center; align-items:center; font-family:'Nu
 .pdot { flex:1; height:6px; border-radius:50px; background:rgba(255,255,255,.25); }
 .pdot.done { background:var(--yellow); }
 .game-hint { background:rgba(255,255,255,.2); margin:0 18px 14px; border-radius:14px; padding:9px 14px; font-size:13px; color:#fff; font-weight:700; text-align:center; flex-shrink:0; }
-.game-pairs { flex:1; overflow-y:auto; padding:0 18px 14px; display:flex; flex-direction:column; gap:14px; }
-.game-pairs::-webkit-scrollbar { display:none; }
-.game-row { display:flex; align-items:center; gap:10px; }
-.gpic { width:70px; height:70px; }
-.connector { flex:1; height:4px; border-radius:50px; background:rgba(255,255,255,.2); display:flex; align-items:center; justify-content:center; position:relative; }
-.connector.connected { background:var(--yellow); box-shadow:0 0 12px rgba(255,217,61,.6); }
-.connector-dot { width:10px; height:10px; border-radius:50%; background:rgba(255,255,255,.35); }
-.connector-dot.connected { background:var(--yellow); }
+.game-pairs { flex:1; overflow:hidden; padding:0 18px 14px; display:flex; gap:0; position:relative; }
+.game-col { flex:1; display:flex; flex-direction:column; gap:8px; z-index:1; }
+#match-svg { position:absolute; top:0; left:18px; right:18px; width:calc(100% - 36px); height:100%; pointer-events:none; overflow:visible; z-index:2; }
+.match-card { background:rgba(255,255,255,.15); border-radius:14px; padding:7px 6px 6px; display:flex; flex-direction:column; align-items:center; gap:5px; cursor:pointer; border:2.5px solid transparent; transition:transform .18s, border-color .18s, box-shadow .18s; }
+.match-card:active { transform:scale(.96); }
+.match-card .cpic { width:54px; height:54px; flex-shrink:0; }
+.match-card .card-name { font-size:11px; font-weight:700; color:#fff; text-align:center; line-height:1.2; }
+.match-card.selected { border-color:var(--yellow); box-shadow:0 0 0 3px rgba(255,217,61,.45); transform:scale(1.05); }
+.match-card.matched { border-color:rgba(255,255,255,.5); }
 .game-footer { padding:12px 18px 28px; flex-shrink:0; }
 @keyframes matchPop { 0%{transform:scale(1)} 40%{transform:scale(1.18)} 100%{transform:scale(1)} }
 .pop { animation:matchPop .3s ease; }
@@ -896,6 +897,8 @@ async function startGame() {
   startTimer();
 }
 
+const MATCH_COLORS = ['#FF6B6B','#4ECDC4','#FFD93D','#A29BFE','#FD79A8'];
+
 function renderGame() {
   const { persons, dogs, count } = gameState;
 
@@ -903,105 +906,120 @@ function renderGame() {
   document.getElementById('prog-dots').innerHTML =
     Array.from({length: count}, (_, i) => `<div class="pdot" id="pdot-${i}"></div>`).join('');
 
-  // Pairs grid — persons left, dogs right, shuffled independently
+  // Two independent columns + SVG overlay for crisscross match lines
   const pairsEl = document.getElementById('game-pairs');
-  pairsEl.innerHTML = persons.map((p, i) => {
-    const d = dogs[i];
-    return `
-      <div class="game-row" id="row-${p.id}">
-        <div class="cpic gpic" id="person-${p.id}"
-          onclick="selectPerson(${p.id})"
-          onmousedown="startDrag(event,${p.id},'person')"
-          ontouchstart="startDrag(event,${p.id},'person')">
-          ${p.photo ? `<img src="${p.photo}" alt="${esc(p.name)}" ondblclick="lightbox('${p.photo}','')">` : '🧑'}
-        </div>
-        <div class="connector" id="connector-${p.id}">
-          <div class="connector-dot" id="cdot-${p.id}"></div>
-        </div>
-        <div class="cpic gpic" id="dog-${d.id}"
-          onclick="selectDog(${d.id})"
-          onmousedown="startDrag(event,${d.id},'dog')"
-          ontouchstart="startDrag(event,${d.id},'dog')">
-          ${d.photo ? `<img src="${d.photo}" alt="${esc(d.name)}" ondblclick="lightbox('${d.photo}','')">` : '🐶'}
-        </div>
-      </div>`;
-  }).join('');
+  const personsHTML = persons.map(p => `
+    <div class="match-card" id="person-${p.id}" onclick="selectPerson(${p.id})">
+      <div class="cpic" style="width:54px;height:54px;">
+        ${p.photo ? `<img src="${p.photo}" alt="${esc(p.name)}">` : '🧑'}
+      </div>
+      <div class="card-name">${esc(p.name)}</div>
+    </div>`).join('');
+  const dogsHTML = dogs.map(d => `
+    <div class="match-card" id="dog-${d.id}" onclick="selectDog(${d.id})">
+      <div class="cpic" style="width:54px;height:54px;">
+        ${d.photo ? `<img src="${d.photo}" alt="${esc(d.name)}">` : '🐶'}
+      </div>
+      <div class="card-name">${esc(d.name)}</div>
+    </div>`).join('');
+
+  pairsEl.innerHTML = `
+    <div class="game-col" id="persons-col">${personsHTML}</div>
+    <svg id="match-svg"></svg>
+    <div class="game-col" id="dogs-col">${dogsHTML}</div>`;
 
   updateSubmitBtn();
 }
 
-function selectPerson(personId) {
-  // Deselect any previously matched? No — only tap-to-match on unmatched
-  if (isPersonMatched(personId)) return;
+function drawMatchLines() {
+  const svg = document.getElementById('match-svg');
+  if (!svg) return;
+  svg.innerHTML = '';
+  const svgRect = svg.getBoundingClientRect();
+  let ci = 0;
+  for (const [personId, dogId] of Object.entries(gameState.matches)) {
+    const pEl = document.getElementById('person-' + personId);
+    const dEl = document.getElementById('dog-' + dogId);
+    if (!pEl || !dEl) continue;
+    const pRect = pEl.getBoundingClientRect();
+    const dRect = dEl.getBoundingClientRect();
+    const x1 = pRect.right - svgRect.left;
+    const y1 = pRect.top + pRect.height / 2 - svgRect.top;
+    const x2 = dRect.left - svgRect.left;
+    const y2 = dRect.top + dRect.height / 2 - svgRect.top;
+    const color = MATCH_COLORS[ci % MATCH_COLORS.length]; ci++;
+    const mx = (x1 + x2) / 2;
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}`);
+    path.setAttribute('stroke', color);
+    path.setAttribute('stroke-width', '3.5');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('opacity', '0.95');
+    svg.appendChild(path);
+    [x1, y1, x2, y2].forEach((_, i, a) => {
+      if (i % 2 !== 0) return;
+      const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      dot.setAttribute('cx', a[i]); dot.setAttribute('cy', a[i+1]); dot.setAttribute('r', '5');
+      dot.setAttribute('fill', color); svg.appendChild(dot);
+    });
+    pEl.style.borderColor = color;
+    dEl.style.borderColor = color;
+  }
+}
 
-  // Deselect previous
+function selectPerson(personId) {
+  if (isPersonMatched(personId)) {
+    for (const [pid, did] of Object.entries(gameState.matches)) {
+      if (parseInt(pid) === personId) {
+        delete gameState.matches[pid];
+        const pEl = document.getElementById('person-' + pid);
+        const dEl = document.getElementById('dog-' + did);
+        pEl?.classList.remove('matched'); pEl && (pEl.style.borderColor = '');
+        dEl?.classList.remove('matched'); dEl && (dEl.style.borderColor = '');
+        drawMatchLines();
+        updateSubmitBtn(); updateProgressDots();
+        break;
+      }
+    }
+  }
   if (gameState.selectedPerson) {
     document.getElementById('person-' + gameState.selectedPerson)?.classList.remove('selected');
   }
-
-  if (gameState.selectedPerson === personId) {
-    gameState.selectedPerson = null;
-    return;
-  }
-
+  if (gameState.selectedPerson === personId) { gameState.selectedPerson = null; return; }
   gameState.selectedPerson = personId;
-  document.getElementById('person-' + personId).classList.add('selected');
+  document.getElementById('person-' + personId)?.classList.add('selected');
   document.getElementById('game-hint').textContent = '🐶 Now tap the matching dog!';
 }
 
 function selectDog(dogId) {
-  if (!gameState.selectedPerson) {
-    // Select dog first — reverse flow
-    toast('👆 Tap a person first!');
-    return;
-  }
-
+  if (!gameState.selectedPerson) { toast('👆 Tap a person first!'); return; }
   const personId = gameState.selectedPerson;
 
-  // Remove any existing match for this person or this dog
   for (const [pid, did] of Object.entries(gameState.matches)) {
     if (parseInt(pid) === personId || parseInt(did) === dogId) {
       delete gameState.matches[pid];
-      document.getElementById('person-' + pid)?.classList.remove('matched');
-      document.getElementById('dog-' + did)?.classList.remove('matched');
-      document.getElementById('connector-' + pid)?.classList.remove('connected');
-      document.getElementById('cdot-' + pid)?.classList.remove('connected');
+      const pEl = document.getElementById('person-' + pid);
+      const dEl = document.getElementById('dog-' + did);
+      pEl?.classList.remove('matched'); pEl && (pEl.style.borderColor = '');
+      dEl?.classList.remove('matched'); dEl && (dEl.style.borderColor = '');
     }
   }
 
   gameState.matches[personId] = dogId;
   gameState.selectedPerson = null;
 
-  // Swap matched dog into same row as person so the connector line is correct
-  swapDogToRow(personId, dogId);
-
-  // Animate match
   const pEl = document.getElementById('person-' + personId);
   const dEl = document.getElementById('dog-' + dogId);
   pEl?.classList.remove('selected');
   pEl?.classList.add('matched', 'pop');
   dEl?.classList.add('matched', 'pop');
-  document.getElementById('connector-' + personId)?.classList.add('connected');
-  document.getElementById('cdot-' + personId)?.classList.add('connected');
   setTimeout(() => { pEl?.classList.remove('pop'); dEl?.classList.remove('pop'); }, 350);
 
+  drawMatchLines();
   document.getElementById('game-hint').textContent = '✅ Matched! Keep going…';
   updateSubmitBtn();
   updateProgressDots();
-}
-
-function swapDogToRow(personId, dogId) {
-  const personRow = document.getElementById('row-' + personId);
-  const dogEl = document.getElementById('dog-' + dogId);
-  if (!personRow || !dogEl) return;
-  const existingDog = personRow.querySelector('[id^="dog-"]');
-  if (!existingDog || existingDog === dogEl) return;
-  // Swap the two dog elements between their rows
-  const dogParentRow = dogEl.parentElement;
-  const placeholder = document.createElement('span');
-  dogParentRow.insertBefore(placeholder, dogEl);
-  personRow.replaceChild(dogEl, existingDog);
-  dogParentRow.replaceChild(existingDog, placeholder);
 }
 
 function isPersonMatched(personId) {
